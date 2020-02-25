@@ -1,0 +1,184 @@
+---
+title: "Data analysis"
+author: "Group 6: Bianka R., Helene, Stine F.H., Nanna and Katrine"
+date: "2/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+library(tidyverse)
+pacman::p_load(lme4, LmerTest)
+ggplot2::theme_set(theme_bw())
+library(DHARMa)
+
+```
+
+```{r load data}
+#Samples <- read_csv("Exported_EyeLink_data/Samples_merged.csv") %>% 
+ # mutate(GazeY = 1051-GazeY, Fix_MeanY = 1051-Fix_MeanY) %>% 
+  #filter(Time<=41202)
+
+Samples <- read_csv("Exported_EyeLink_data/Samples_merged.csv", col_types = cols(ParticipantID = col_character(), ParticipantGender = col_character(), EyeTracked = col_character(), Task = col_character(), SearchOrder = col_double(), ForagingType = col_character(), Trial = col_double(), Stimulus = col_character(), Video = col_character(), Time = col_double(), GazeX = col_double(), GazeY = col_double(), PupilSize = col_double(), FixationNo = col_double(), Fix_StartTime = col_double(), Fix_EndTime = col_double(), Fix_Duration = col_double(), Fix_MeanX = col_double(), Fix_MeanY = col_double(), Fix_MeanPupilSize = col_double(), SaccadeNo = col_double(), Sac_StartTime = col_double(), Sac_EndTime = col_double(), Sac_Duration = col_double(), Sac_StartX = col_double(), Sac_StartY = col_double(), Sac_EndX = col_double(), Sac_EndY = col_double(), Sac_PeakVelocity = col_double(), Sac_MeanVelocity = col_double(), Sac_Blink = col_logical(), Sac_Direction = col_character(), Sac_Amplitude = col_double()))
+```
+
+```{r what are the implications of modeling the data in a different way,  include=FALSE} 
+## Subsetting the Forarging experiment
+x = subset(Samples, Task == "Foraging", !is.na(SaccadeNo))
+
+x <- x %>% group_by(ParticipantID, Stimulus, ForagingType, SaccadeNo) %>% summarise(Saccade_Amplitude = mean(Sac_Amplitude, na.rm = TRUE))
+
+#We model
+sac_ampl_gaus <- glmer(Saccade_Amplitude ~ 1 + ForagingType + 
+        (1 + ForagingType | ParticipantID) +  
+        (1 + ForagingType | Stimulus), data = x, family = gaussian(link=log))
+summary(sac_ampl_gaus)
+## The averages for count seems to be 0.9 but when doing a boxplot Riccardo saw that it's not 
+# Because we put in the link = log the estimates are on a log scale. We need to invert these. Eksponentiate.  
+exp(0.93+0.54)  #exp of intercept + slope. The average saccade length in the foraging???
+exp(0.93) # exp of intercept. the average in the count task
+exp(0.93+0.54) -  exp(0.93) #we subtract to get the difference
+#count is the intercept foraging type. 
+# The slope 0.5 needs to be inverted when we want to understand it
+
+#The amplitude s in degrees where it's the angle it eyeball moves compared to the screen.
+
+#We model
+sac_ampl_id <- glmer(Saccade_Amplitude ~ 1 + ForagingType + 
+        (1 + ForagingType | ParticipantID) +  
+        (1 + ForagingType | Stimulus), data = x, family = gaussian(link=identity))
+summary(sac_ampl_id)
+
+
+p_1 <- predict(sac_ampl_gaus)
+p_2 <- predict(sac_ampl_id)
+
+#The distribution of the density based on the predictions of the gaussian lognomial model
+plot(density(p_1))
+#The distribution of the density of the gaussian model
+plot(density(p_2)) #It does not have a long tale because it tries to normally distribute it. 
+#plot(density(x$SaccadeNo))
+summary(abs(p_1-x$Saccade_Amplitude))
+summary(abs(p_2-x$Saccade_Amplitude))
+
+
+dh_1 <- DHARMa::simulateResiduals(sac_ampl_gaus)
+
+
+dh_2 <- DHARMa::simulateResiduals(sac_ampl_id)
+
+plot(dh_1)
+plot(dh_2)
+
+
+```
+With gaussian we are undermining the tales. 
+With the lognomial it's not really better
+
+Conclusions:
+We tried to build a model that make conceptual sense. 
+In which ways are the model failing us. 
+We compared it with a gaussian model. Does it make sense to use a log model?
+We find that there are longer saccade amplitude. This means a specific amount of degrees. 
+We looked at the general distributions of the data. 0.5% R2m variance is explained. If we know the participants then 2.7%. 
+The model can capture the general difference between conditions but it fails as capturing the single saccades. Some are exploratoty and some exploit. 
+
+```{r Analysis for Assignment 1 Social Engagement}
+#Social Engagement task
+#We will look for differences in pupil size in engagement vs. observatonal only stimuli
+
+## Subsetting the Social Engagement experiment
+x = subset(Samples, Task == "SocialEngagement", !is.na(PupilSize))
+#We take an average pupilsize for each fixation
+
+#We make the video column into multiple columns
+x <- separate(x, Video, c("Gender", NA, NA, "Orientation", "Ostensive"), remove = FALSE, sep = "_")
+
+#We now group by participants and 
+x <- x %>% group_by(Fix_MeanPupilSize, Trial, FixationNo, ParticipantID, Orientation, Ostensive, Gender) %>% 
+  summarize(PupilSize = mean(PupilSize))
+
+#We model
+model <- glmer(PupilSize ~ 1 +  Orientation * Ostensive +
+        (1 + Orientation * Ostensive | ParticipantID), data = x, family = gaussian(link=log))
+summary(model) #We use log because we believe it will reflect the data better. 
+
+#Here we get no significant interaction so we model again without
+model <- glmer(PupilSize ~ 0 +  Orientation + Ostensive +
+        (0 + Orientation + Ostensive | ParticipantID), data = x, family = gaussian(link=log))
+summary(model)
+
+
+x$Ostensive <- as.factor(x$Ostensive)
+x$Ostensive <- relevel(x$Ostensive, ref = "+o")
+
+model <- glmer(PupilSize ~ 0 +  Orientation + Ostensive +
+        (0 + Orientation + Ostensive | ParticipantID), data = x, family = gaussian(link=log))
+summary(model)
+
+
+#We get a significant effect of the diverted orientation. When doing it with link = identity we do not get anything significant. 
+
+#We need to plot it
+ggplot(x, aes(FixationNo, PupilSize, color = Orientation)) + geom_smooth(method = "lm")
+
+#We plot with participant ID as well
+ggplot(x, aes(FixationNo, PupilSize, color = ParticipantID, fill = Orientation)) + geom_smooth(method = "lm", se = F, aes(linetype=Orientation))
+```
+
+
+```{r Assignment 1 Foraging experiment}
+## Subsetting the Forarging experiment
+x = subset(Samples, Task == "Foraging", !is.na(SaccadeNo))
+
+x <- x %>% group_by(ParticipantID, Stimulus, ForagingType, SaccadeNo) %>% summarise(Saccade_Amplitude = mean(Sac_Amplitude, na.rm = TRUE))
+
+#We model
+sac_ampl_gaus <- glmer(Saccade_Amplitude ~ 1 + ForagingType + 
+        (1 + ForagingType | ParticipantID) +  
+        (1 + ForagingType | Stimulus), data = x, family = gaussian(link=log))
+summary(sac_ampl_gaus)
+# We plot
+ggplot(x, aes(SaccadeNo, Saccade_Amplitude, color=ParticipantID))+
+  geom_smooth(aes(linetype=ForagingType), method="lm",se=F) + facet_wrap(.~Stimulus)
+
+ggplot(x, aes(SaccadeNo, Saccade_Amplitude, color=ParticipantID))+
+  geom_smooth(aes(linetype=ForagingType), method="lm",se=F)
+```
+
+
+
+```{r Estimating events manually,  include=FALSE}
+#We use only x,y and time
+
+Samples2 <- Samples %>% 
+  mutate(Velocity = abs((lead(GazeX)-GazeX)/Time*1000)) #We multiply with 1000 to go into seconds? We get very big changes so we will smooth to make it more realistic
+#We use pythagoras a^2 + b^2 = c^2. The lead gaze x minus the previous
+#We use abs because we don't want the negative values. 
+#We can't trust these numbers because they are pixels per second and not degrees. 
+
+#The values are quite low when it's durring a fixation. 
+
+#Now we make an algorithm
+Samples2 <- Samples %>% 
+  mutate(Velocity = abs((lead(GazeX)-GazeX)/Time*1000)) %>%
+  mutate(Event = ifelse(Velocity >= 1.5, "Saccade", "Fixation"))
+
+#We need some kind of smoothing. If mostly saccades with a few fixations inbetween we want to call the whole chunk a saccade
+Samples2 <- Samples %>% 
+  mutate(Velocity = abs((lead(GazeX)-GazeX)/Time*1000)) %>%
+  mutate(Event = ifelse(Velocity >= 1.5, "Saccade", "Fixation")) %>% 
+  filter(Velocity != "Inf") %>%
+  mutate(Velocity_smooth = (cumsum(Velocity) - lag(cumsum(Velocity), n = 20))/20) %>%
+  mutate(Event_smooth = ifelse(Velocity_smooth >= 0.5, "Saccade", "Fixation"))
+
+
+ggplot(data = Samples2[Samples2$ParticipantID == "F2" & 
+  Samples2$Trial == 1,], 
+  aes(Time, GazeX, color = ParticipantID)) +
+  geom_point()
+
+
+```
+
