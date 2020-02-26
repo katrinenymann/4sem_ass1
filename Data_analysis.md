@@ -6,42 +6,10 @@
 Samples <- read_csv("Exported_EyeLink_data/Samples_merged.csv", col_types = cols(ParticipantID = col_character(), ParticipantGender = col_character(), EyeTracked = col_character(), Task = col_character(), SearchOrder = col_double(), ForagingType = col_character(), Trial = col_double(), Stimulus = col_character(), Video = col_character(), Time = col_double(), GazeX = col_double(), GazeY = col_double(), PupilSize = col_double(), FixationNo = col_double(), Fix_StartTime = col_double(), Fix_EndTime = col_double(), Fix_Duration = col_double(), Fix_MeanX = col_double(), Fix_MeanY = col_double(), Fix_MeanPupilSize = col_double(), SaccadeNo = col_double(), Sac_StartTime = col_double(), Sac_EndTime = col_double(), Sac_Duration = col_double(), Sac_StartX = col_double(), Sac_StartY = col_double(), Sac_EndX = col_double(), Sac_EndY = col_double(), Sac_PeakVelocity = col_double(), Sac_MeanVelocity = col_double(), Sac_Blink = col_logical(), Sac_Direction = col_character(), Sac_Amplitude = col_double()))
 ```
 
-With gaussian we are undermining the tales. With the lognomial it’s not
-really better
+What are the implications of modeling the data in a different way
 
-Conclusions: We tried to build a model that make conceptual sense. In
-which ways are the model failing us. We compared it with a gaussian
-model. Does it make sense to use a log model? We find that there are
-longer saccade amplitude. This means a specific amount of degrees. We
-looked at the general distributions of the data. 0.5% R2m variance is
-explained. If we know the participants then 2.7%. The model can capture
-the general difference between conditions but it fails as capturing the
-single saccades. Some are exploratoty and some exploit.
-
-Scan path
-
-``` r
-## Here I am making the scanpath for one participant in one trial
-x = subset(Samples, ParticipantID ==    'F7_2' & Trial == 10)
-
-## Let's make a summary dataset
-Fix <- x[!is.na(x$FixationNo),] %>% 
-  group_by(FixationNo) %>% # since I only have one participant and one trial
-  summarize(MeanX = Fix_MeanX[1], MeanY = Fix_MeanY[1], Duration = Fix_Duration[1]) %>% 
-  filter(Duration>=300) # only keep fixations > 300 ms because the other don't make sense cognitively
-
-img <- jpeg::readJPEG('stimuli_Foraging/space_capsules.jpg')  
-img <- grid::rasterGrob(img, width=unit(1, "npc"), height = unit(1,"npc"),
-                        interpolate = FALSE)
-ggplot(Fix, aes(MeanX, MeanY, color = Fix$FixationNo)) + 
-  annotation_custom(img, xmin = 0, xmax = 1680, ymin = 0, ymax = 1050) +
-  geom_path(color = "black") +
-  geom_point(size = Fix$Duration*.02, alpha = .8, fill = "NA") +
-  ggrepel::geom_text_repel(aes(label = Fix$Duration), size = 3, color = "white") +
-  xlim(0,1680) + ylim(0,1050)
-```
-
-![](Data_analysis_files/figure-markdown_github/unnamed-chunk-2-1.png)
+Analysis for Assignment 1 Social Engagement
+-------------------------------------------
 
 ``` r
 #Social Engagement task
@@ -111,45 +79,52 @@ summary(model) #We use log because we believe it will reflect the data better.
 
 ``` r
 #Here we get no significant interaction so we model again without
-model <- glmer(PupilSize ~ 1 +  Orientation + Ostensive +
-        (1 + Orientation + Ostensive | ParticipantID), data = x, family = gaussian(link=log))
+model <- glmer(PupilSize ~ 0 +  Orientation + Ostensive +
+        (0 + Orientation + Ostensive | ParticipantID), data = x, family = gaussian(link=log))
+```
+
+    ## boundary (singular) fit: see ?isSingular
+
+``` r
 summary(model)
 ```
 
     ## Generalized linear mixed model fit by maximum likelihood (Laplace
     ##   Approximation) [glmerMod]
     ##  Family: gaussian  ( log )
-    ## Formula: PupilSize ~ 1 + Orientation + Ostensive + (1 + Orientation +  
+    ## Formula: PupilSize ~ 0 + Orientation + Ostensive + (0 + Orientation +  
     ##     Ostensive | ParticipantID)
     ##    Data: x
     ## 
     ##      AIC      BIC   logLik deviance df.resid 
-    ##   8764.6   8808.4  -4372.3   8744.6      577 
+    ##   8708.7   8752.5  -4344.4   8688.7      577 
     ## 
     ## Scaled residuals: 
     ##     Min      1Q  Median      3Q     Max 
-    ## -3.6589 -0.5265  0.0936  0.6507  2.7538 
+    ## -3.3565 -0.6005  0.1130  0.6497  2.8827 
     ## 
     ## Random effects:
     ##  Groups        Name           Variance  Std.Dev. Corr       
-    ##  ParticipantID (Intercept)      1643.03  40.534             
-    ##                Orientationdiv     65.45   8.090  -0.45      
-    ##                Ostensive+o        77.42   8.799  -0.15 -0.18
-    ##  Residual                     105952.03 325.503             
+    ##  ParticipantID Orientationdir   1700.37  41.236             
+    ##                Orientationdiv   1457.75  38.181   1.00      
+    ##                Ostensive+o        80.89   8.994  -0.15 -0.15
+    ##  Residual                     111284.94 333.594             
     ## Number of obs: 587, groups:  ParticipantID, 6
     ## 
     ## Fixed effects:
     ##                  Estimate Std. Error t value Pr(>|z|)    
-    ## (Intercept)     8.7860548  0.0508384 172.823  < 2e-16 ***
-    ## Orientationdiv -0.0300615  0.0101466  -2.963  0.00305 ** 
-    ## Ostensive+o    -0.0003226  0.0110354  -0.029  0.97668    
+    ## Orientationdir  8.7858291  0.0504818 174.039   <2e-16 ***
+    ## Orientationdiv  8.7559318  0.0467676 187.222   <2e-16 ***
+    ## Ostensive+o    -0.0002751  0.0110071  -0.025     0.98    
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
     ## Correlation of Fixed Effects:
-    ##             (Intr) Ornttn
-    ## Orientatndv -0.450       
-    ## Ostensive+o -0.146 -0.176
+    ##             Ornttndr Ornttndv
+    ## Orientatndv  0.996           
+    ## Ostensive+o -0.148   -0.149  
+    ## convergence code: 0
+    ## boundary (singular) fit: see ?isSingular
 
 ``` r
 x$Ostensive <- as.factor(x$Ostensive)
@@ -206,17 +181,20 @@ summary(model)
 #We get a significant effect of the diverted orientation. When doing it with link = identity we do not get anything significant. 
 
 #We need to plot it
-ggplot(x, aes(FixationNo, PupilSize, color = Orientation)) + geom_smooth(method = "lm") + ggtitle("Average Pupil Size for all participants across fixations")
+ggplot(x, aes(FixationNo, PupilSize, color = Orientation)) + geom_smooth(method = "lm")
 ```
 
-![](Data_analysis_files/figure-markdown_github/Analysis%20for%20Assignment%201%20Social%20Engagement-1.png)
+![](Data_analysis_files/figure-markdown_github/unnamed-chunk-2-1.png)
 
 ``` r
 #We plot with participant ID as well
-ggplot(x, aes(FixationNo, PupilSize, color = ParticipantID, fill = Orientation)) + geom_smooth(method = "lm", se = F, aes(linetype=Orientation)) + ggtitle("Pupil Size according to fixations in the direct and diverted condition")
+ggplot(x, aes(FixationNo, PupilSize, color = ParticipantID, fill = Orientation)) + geom_smooth(method = "lm", se = F, aes(linetype=Orientation))
 ```
 
-![](Data_analysis_files/figure-markdown_github/Analysis%20for%20Assignment%201%20Social%20Engagement-2.png)
+![](Data_analysis_files/figure-markdown_github/unnamed-chunk-2-2.png)
+
+Analysis for Assignment 1 Foraging experiment
+---------------------------------------------
 
 ``` r
 ## Subsetting the Forarging experiment
@@ -276,15 +254,14 @@ summary(sac_ampl_gaus)
 ``` r
 # We plot
 ggplot(x, aes(SaccadeNo, Saccade_Amplitude, color=ParticipantID))+
-  geom_smooth(aes(linetype=ForagingType), method="lm",se=F) + facet_wrap(.~Stimulus) +
-  ggtitle("Saccade amplitudes across saccades in the different stimuli for each participant")
+  geom_smooth(aes(linetype=ForagingType), method="lm",se=F) + facet_wrap(.~Stimulus)
 ```
 
-![](Data_analysis_files/figure-markdown_github/Assignment%201%20Foraging%20experiment-1.png)
+![](Data_analysis_files/figure-markdown_github/unnamed-chunk-3-1.png)
 
 ``` r
 ggplot(x, aes(SaccadeNo, Saccade_Amplitude, color=ParticipantID))+
-  geom_smooth(aes(linetype=ForagingType), method="lm",se=F) + ggtitle("Saccade amplitude across saccades for the two different Foraging types")
+  geom_smooth(aes(linetype=ForagingType), method="lm",se=F)
 ```
 
-![](Data_analysis_files/figure-markdown_github/Assignment%201%20Foraging%20experiment-2.png)
+![](Data_analysis_files/figure-markdown_github/unnamed-chunk-3-2.png)
